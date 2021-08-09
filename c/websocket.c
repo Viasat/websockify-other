@@ -163,6 +163,10 @@ ws_ctx_t *ws_socket_ssl(ws_ctx_t *ctx, int socket, char * certfile, char * keyfi
         fatal("Failed to configure SSL context");
     }
 
+    if (SSL_CTX_set_min_proto_version(ctx->ssl_ctx, TLS1_2_VERSION) <= 0) {
+        fatal("Failed to set minimum SSL version");
+    }
+
     if (SSL_CTX_use_PrivateKey_file(ctx->ssl_ctx, use_keyfile,
                                     SSL_FILETYPE_PEM) <= 0) {
         sprintf(msg, "Unable to load private key file %s\n", use_keyfile);
