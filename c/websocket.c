@@ -39,19 +39,20 @@ settings_t settings;
 
 void traffic(const char * token) {
     if ((settings.verbose) && (! settings.daemon)) {
-        fprintf(stdout, "%s", token);
-        fflush(stdout);
+        handler_msg("%s", token);
     }
 }
 
 void error(char *msg)
 {
     perror(msg);
+    handler_emsg(msg);
 }
 
 void fatal(char *msg)
 {
     perror(msg);
+    handler_emsg(msg);
     exit(1);
 }
 
@@ -85,7 +86,7 @@ int resolve_host(struct in_addr *sin_addr, const char *hostname)
 
 ssize_t ws_recv(ws_ctx_t *ctx, void *buf, size_t len) {
     if (ctx->ssl) {
-        //handler_msg("SSL recv\n");
+        //handler_msg("SSL recv");
         return SSL_read(ctx->ssl, buf, len);
     } else {
         return recv(ctx->sockfd, buf, len, 0);
@@ -94,7 +95,7 @@ ssize_t ws_recv(ws_ctx_t *ctx, void *buf, size_t len) {
 
 ssize_t ws_send(ws_ctx_t *ctx, const void *buf, size_t len) {
     if (ctx->ssl) {
-        //handler_msg("SSL send\n");
+        //handler_msg("SSL send");
         return SSL_write(ctx->ssl, buf, len);
     } else {
         return send(ctx->sockfd, buf, len, 0);
@@ -301,7 +302,7 @@ int decode_hixie(char *src, size_t srclength,
     int i, len, framecount = 0, retlen = 0;
     unsigned char chr;
     if ((src[0] != '\x00') || (src[srclength-1] != '\xff')) {
-        handler_emsg("WebSocket framing error\n");
+        handler_emsg("WebSocket framing error");
         return -1;
     }
     *left = srclength;
@@ -343,7 +344,7 @@ int encode_hybi(u_char const *src, size_t srclength,
     int len = 0;
 
     if (opcode != OPCODE_TEXT && opcode != OPCODE_BINARY) {
-        handler_emsg("Invalid opcode. Opcode must be 0x01 for text mode, or 0x02 for binary mode.\n");
+        handler_emsg("Invalid opcode. Opcode must be 0x01 for text mode, or 0x02 for binary mode.");
         return -1;
     }
 
@@ -367,7 +368,7 @@ int encode_hybi(u_char const *src, size_t srclength,
         *(u_short*)&(target[2]) = htons(len);
         payload_offset = 4;
     } else {
-        handler_emsg("Sending frames larger than 65535 bytes not supported\n");
+        handler_emsg("Sending frames larger than 65535 bytes not supported");
         return -1;
         //target[1] = (char) 127;
         //*(u_long*)&(target[2]) = htonl(b64_sz);
@@ -441,7 +442,7 @@ int decode_hybi(unsigned char *src, size_t srclength,
             payload_length = (frame[2] << 8) + frame[3];
             hdr_length = 4;
         } else {
-            handler_emsg("Receiving frames larger than 65535 bytes not supported\n");
+            handler_emsg("Receiving frames larger than 65535 bytes not supported");
             return -1;
         }
         if ((hdr_length + 4*masked + payload_length) > remaining) {
@@ -451,17 +452,17 @@ int decode_hybi(unsigned char *src, size_t srclength,
         payload = frame + hdr_length + 4*masked;
 
         if (*opcode != OPCODE_TEXT && *opcode != OPCODE_BINARY) {
-            handler_msg("Ignoring non-data frame, opcode 0x%x\n", *opcode);
+            handler_msg("Ignoring non-data frame, opcode 0x%x", *opcode);
             continue;
         }
 
         if (payload_length == 0) {
-            handler_msg("Ignoring empty frame\n");
+            handler_msg("Ignoring empty frame");
             continue;
         }
 
         if ((payload_length > 0) && (!masked)) {
-            handler_emsg("Received unmasked payload from client\n");
+            handler_emsg("Received unmasked payload from client");
             return -1;
         }
 
@@ -669,16 +670,16 @@ ws_ctx_t *do_handshake(int sock) {
     len = recv(sock, handshake, 1024, MSG_PEEK);
     handshake[len] = 0;
     if (len == 0) {
-        handler_msg("ignoring empty handshake\n");
+        handler_msg("ignoring empty handshake");
         return NULL;
     } else if ((bcmp(handshake, "\x16", 1) == 0) ||
                (bcmp(handshake, "\x80", 1) == 0)) {
         // SSL
         if (!settings.cert) {
-            handler_msg("SSL connection but no cert specified\n");
+            handler_msg("SSL connection but no cert specified");
             return NULL;
         } else if (access(settings.cert, R_OK) != 0) {
-            handler_msg("SSL connection but '%s' not found\n",
+            handler_msg("SSL connection but '%s' not found",
                         settings.cert);
             return NULL;
         }
@@ -686,26 +687,26 @@ ws_ctx_t *do_handshake(int sock) {
         ws_socket_ssl(ws_ctx, sock, settings.cert, settings.key);
         if (! ws_ctx) { return NULL; }
         scheme = "wss";
-        handler_msg("using SSL socket\n");
+        handler_msg("using SSL socket");
     } else if (settings.ssl_only) {
-        handler_msg("non-SSL connection disallowed\n");
+        handler_msg("non-SSL connection disallowed");
         return NULL;
     } else {
         ws_ctx = alloc_ws_ctx();
         ws_socket(ws_ctx, sock);
         if (! ws_ctx) { return NULL; }
         scheme = "ws";
-        handler_msg("using plain (not SSL) socket\n");
+        handler_msg("using plain (not SSL) socket");
     }
     offset = 0;
     for (i = 0; i < 10; i++) {
         /* (offset + 1): reserve one byte for the trailing '\0' */
         if (0 > (len = ws_recv(ws_ctx, handshake + offset, sizeof(handshake) - (offset + 1)))) {
-            handler_emsg("Read error during handshake: %m\n");
+            handler_emsg("Read error during handshake: %m");
             free_ws_ctx(ws_ctx);
             return NULL;
         } else if (0 == len) {
-            handler_emsg("Client closed during handshake\n");
+            handler_emsg("Client closed during handshake");
             free_ws_ctx(ws_ctx);
             return NULL;
         }
@@ -714,20 +715,20 @@ ws_ctx_t *do_handshake(int sock) {
         if (strstr(handshake, "\r\n\r\n")) {
             break;
         } else if (sizeof(handshake) <= (size_t)(offset + 1)) {
-            handler_emsg("Oversized handshake\n");
+            handler_emsg("Oversized handshake");
             free_ws_ctx(ws_ctx);
             return NULL;
         } else if (9 == i) {
-            handler_emsg("Incomplete handshake\n");
+            handler_emsg("Incomplete handshake");
             free_ws_ctx(ws_ctx);
             return NULL;
         }
         usleep(10);
     }
 
-    //handler_msg("handshake: %s\n", handshake);
+    //handler_msg("handshake: %s", handshake);
     if (!parse_handshake(ws_ctx, handshake)) {
-        handler_emsg("Invalid WS request\n");
+        handler_emsg("Invalid WS request");
         free_ws_ctx(ws_ctx);
         return NULL;
     }
@@ -752,18 +753,18 @@ ws_ctx_t *do_handshake(int sock) {
     }
 
     if (ws_ctx->hybi > 0) {
-        handler_msg("using protocol HyBi/IETF 6455 %d\n", ws_ctx->hybi);
+        handler_msg("using protocol HyBi/IETF 6455 %d", ws_ctx->hybi);
         gen_sha1(headers, sha1);
         snprintf(response, sizeof(response), SERVER_HANDSHAKE_HYBI,
                  sha1, response_protocol_header, response_protocol,
                  response_protocol_crlf);
     } else {
         if (ws_ctx->hixie == 76) {
-            handler_msg("using protocol Hixie 76\n");
+            handler_msg("using protocol Hixie 76");
             gen_md5(headers, trailer);
             pre = "Sec-";
         } else {
-            handler_msg("using protocol Hixie 75\n");
+            handler_msg("using protocol Hixie 75");
             trailer[0] = '\0';
             pre = "";
         }
@@ -771,7 +772,7 @@ ws_ctx_t *do_handshake(int sock) {
                  pre, scheme, headers->host, headers->path, pre, "base64", trailer);
     }
 
-    //handler_msg("response: %s\n", response);
+    //handler_msg("response: %s", response);
     ws_send(ws_ctx, response, strlen(response));
 
     return ws_ctx;
@@ -873,11 +874,11 @@ void start_server() {
             error("ERROR on accept");
             continue;
         }
-        handler_msg("got client connection from %s\n",
+        handler_msg("got client connection from %s",
                     inet_ntoa(cli_addr.sin_addr));
 
         if (!settings.run_once) {
-            handler_msg("forking handler process\n");
+            handler_msg("forking handler process");
             pid = fork();
         }
 
@@ -894,13 +895,13 @@ void start_server() {
                 }
             }
             if (ws_ctx == NULL) {
-                handler_msg("No connection after handshake\n");
+                handler_msg("No connection after handshake");
                 break;   // Child process exits
             }
 
             settings.handler(ws_ctx);
             if (pipe_error) {
-                handler_emsg("Closing due to SIGPIPE\n");
+                handler_emsg("Closing due to SIGPIPE");
             }
             break;   // Child process exits
         } else {         // parent process
@@ -916,9 +917,9 @@ void start_server() {
             shutdown(csock, SHUT_RDWR);
             close(csock);
         }
-        handler_msg("handler exit\n");
+        handler_msg("handler exit");
     } else {
-        handler_msg("websockify exit\n");
+        handler_msg("websockify exit");
     }
 
 }

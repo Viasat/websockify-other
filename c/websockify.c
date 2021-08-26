@@ -43,8 +43,8 @@ char USAGE[] = "Usage: [options] " \
                "  --ssl-only         disallow non-encrypted connections";
 
 #define usage(fmt, args...) \
-    fprintf(stderr, "%s\n\n", USAGE); \
-    fprintf(stderr, fmt , ## args); \
+    handler_emsg("%s\n\n", USAGE); \
+    handler_emsg(fmt , ## args); \
     exit(1);
 
 char target_host[256];
@@ -96,19 +96,19 @@ void do_proxy(ws_ctx_t *ws_ctx, int target) {
         if (pipe_error) { break; }
 
         if (FD_ISSET(target, &elist)) {
-            handler_emsg("target exception\n");
+            handler_emsg("target exception");
             break;
         }
         if (FD_ISSET(client, &elist)) {
-            handler_emsg("client exception\n");
+            handler_emsg("client exception");
             break;
         }
 
         if (ret == -1) {
-            handler_emsg("select(): %s\n", strerror(errno));
+            handler_emsg("select(): %s", strerror(errno));
             break;
         } else if (ret == 0) {
-            //handler_emsg("select timeout\n");
+            //handler_emsg("select timeout");
             continue;
         }
 
@@ -117,7 +117,7 @@ void do_proxy(ws_ctx_t *ws_ctx, int target) {
             bytes = send(target, ws_ctx->tout_buf + tout_start, len, 0);
             if (pipe_error) { break; }
             if (bytes < 0) {
-                handler_emsg("target connection error: %s\n",
+                handler_emsg("target connection error: %s",
                              strerror(errno));
                 break;
             }
@@ -135,7 +135,7 @@ void do_proxy(ws_ctx_t *ws_ctx, int target) {
             bytes = ws_send(ws_ctx, ws_ctx->cout_buf + cout_start, len);
             if (pipe_error) { break; }
             if (len < 3) {
-                handler_emsg("len: %d, bytes: %d: %d\n",
+                handler_emsg("len: %d, bytes: %d: %d",
                              (int) len, (int) bytes,
                              (int) *(ws_ctx->cout_buf + cout_start));
             }
@@ -152,7 +152,7 @@ void do_proxy(ws_ctx_t *ws_ctx, int target) {
             bytes = recv(target, ws_ctx->cin_buf, DBUFSIZE , 0);
             if (pipe_error) { break; }
             if (bytes <= 0) {
-                handler_emsg("target closed connection\n");
+                handler_emsg("target closed connection");
                 break;
             }
             cout_start = 0;
@@ -171,7 +171,7 @@ void do_proxy(ws_ctx_t *ws_ctx, int target) {
             printf("\n");
             */
             if (cout_end < 0) {
-                handler_emsg("encoding error\n");
+                handler_emsg("encoding error");
                 break;
             }
             traffic("{");
@@ -181,7 +181,7 @@ void do_proxy(ws_ctx_t *ws_ctx, int target) {
             bytes = ws_recv(ws_ctx, ws_ctx->tin_buf + tin_end, BUFSIZE-1);
             if (pipe_error) { break; }
             if (bytes <= 0) {
-                handler_emsg("client closed connection\n");
+                handler_emsg("client closed connection");
                 break;
             }
             tin_end += bytes;
@@ -205,7 +205,7 @@ void do_proxy(ws_ctx_t *ws_ctx, int target) {
             }
 
             if (opcode == 8) {
-                handler_msg("client sent orderly close frame\n");
+                handler_msg("client sent orderly close frame");
                 break;
             }
 
@@ -217,7 +217,7 @@ void do_proxy(ws_ctx_t *ws_ctx, int target) {
             printf("\n");
             */
             if (len < 0) {
-                handler_emsg("decoding error\n");
+                handler_emsg("decoding error");
                 break;
             }
             if (left) {
@@ -239,11 +239,11 @@ void proxy_handler(ws_ctx_t *ws_ctx) {
     int tsock = 0;
     struct sockaddr_in taddr;
 
-    handler_msg("connecting to: %s:%d\n", target_host, target_port);
+    handler_msg("connecting to: %s:%d", target_host, target_port);
 
     tsock = socket(AF_INET, SOCK_STREAM, 0);
     if (tsock < 0) {
-        handler_emsg("Could not create target socket: %s\n",
+        handler_emsg("Could not create target socket: %s",
                      strerror(errno));
         return;
     }
@@ -253,12 +253,12 @@ void proxy_handler(ws_ctx_t *ws_ctx) {
 
     /* Resolve target address */
     if (resolve_host(&taddr.sin_addr, target_host) < -1) {
-        handler_emsg("Could not resolve target address: %s\n",
+        handler_emsg("Could not resolve target address: %s",
                      strerror(errno));
     }
 
     if (connect(tsock, (struct sockaddr *) &taddr, sizeof(taddr)) < 0) {
-        handler_emsg("Could not connect to target: %s\n",
+        handler_emsg("Could not connect to target: %s",
                      strerror(errno));
         close(tsock);
         return;
@@ -321,13 +321,13 @@ int main(int argc, char *argv[])
             case 'c':
                 settings.cert = realpath(optarg, NULL);
                 if (! settings.cert) {
-                    usage("No cert file at %s\n", optarg);
+                    usage("No cert file at %s", optarg);
                 }
                 break;
             case 'k':
                 settings.key = realpath(optarg, NULL);
                 if (! settings.key) {
-                    usage("No key file at %s\n", optarg);
+                    usage("No key file at %s", optarg);
                 }
                 break;
             default:
@@ -340,7 +340,7 @@ int main(int argc, char *argv[])
     settings.run_once     = run_once;
 
     if ((argc-optind) != 2) {
-        usage("Invalid number of arguments\n");
+        usage("Invalid number of arguments");
     }
 
     found = strstr(argv[optind], ":");
@@ -353,7 +353,7 @@ int main(int argc, char *argv[])
     }
     optind++;
     if (settings.listen_port == 0) {
-        usage("Could not parse listen_port\n");
+        usage("Could not parse listen_port");
     }
 
     found = strstr(argv[optind], ":");
@@ -361,18 +361,18 @@ int main(int argc, char *argv[])
         memcpy(target_host, argv[optind], found-argv[optind]);
         target_port = strtol(found+1, NULL, 10);
     } else {
-        usage("Target argument must be host:port\n");
+        usage("Target argument must be host:port");
     }
     if (target_port == 0) {
-        usage("Could not parse target port\n");
+        usage("Could not parse target port");
     }
 
     if (ssl_only) {
         if (access(settings.cert, R_OK) != 0) {
-            usage("SSL only and cert file '%s' not found\n", settings.cert);
+            usage("SSL only and cert file '%s' not found", settings.cert);
         }
     } else if (access(settings.cert, R_OK) != 0) {
-        fprintf(stderr, "Warning: '%s' not found\n", settings.cert);
+        handler_emsg("Warning: '%s' not found", settings.cert);
     }
 
     //printf("  verbose: %d\n",   settings.verbose);

@@ -79,14 +79,14 @@ ssize_t ws_send(ws_ctx_t *ctx, const void *buf, size_t len);
 //int b64_ntop(u_char const *src, size_t srclength, char *target, size_t targsize);
 //int b64_pton(char const *src, u_char *target, size_t targsize);
 
-#define gen_handler_msg(stream, ...) \
+#include <sys/slog.h>
+#include <sys/slog2.h>
+#define gen_handler_msg(level, ...) \
     if (! settings.daemon) { \
-        fprintf(stream, "  %d: ", settings.handler_id); \
-        fprintf(stream, __VA_ARGS__); \
+        slogf(0, level, __VA_ARGS__); \
     }
-
-#define handler_msg(...) gen_handler_msg(stdout, __VA_ARGS__);
-#define handler_emsg(...) gen_handler_msg(stderr, __VA_ARGS__);
+#define handler_msg(...) gen_handler_msg(SLOG2_DEBUG1, __VA_ARGS__);
+#define handler_emsg(...) gen_handler_msg(SLOG2_ERROR, __VA_ARGS__);
 
 void traffic(const char * token);
 
